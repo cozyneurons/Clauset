@@ -1,0 +1,169 @@
+[
+  {
+    "clause_id": "GCC-1",
+    "clause_title": "Definitions",
+    "clause_text": "In this Contract, the following words and expressions shall have the meanings hereby assigned to them: 'Employer' means the Railway Administration; 'Contractor' means the person or firm whose tender has been accepted; 'Engineer' means the designated railway officer for administering the contract; 'Works' means the works to be executed in accordance with the Contract.",
+    "risk_category": "LOW",
+    "section": "Part I — General Conditions",
+    "keywords": [
+      "definitions",
+      "employer",
+      "contractor",
+      "engineer",
+      "works"
+    ]
+  },
+  {
+    "clause_id": "GCC-4",
+    "clause_title": "Performance Security",
+    "clause_text": "The Contractor shall furnish to the Employer a Performance Security within 21 days of receipt of the Letter of Acceptance. The Performance Security shall be an unconditional bank guarantee from a scheduled commercial bank for 10% of the Contract Price, valid through the Defects Notification Period plus 60 days. Failure to submit the Performance Security entitles the Employer to terminate the Contract.",
+    "risk_category": "HIGH",
+    "section": "Part I — General Conditions",
+    "keywords": [
+      "performance security",
+      "bank guarantee",
+      "10 percent",
+      "termination",
+      "letter of acceptance"
+    ]
+  },
+  {
+    "clause_id": "GCC-8",
+    "clause_title": "Commencement of Works",
+    "clause_text": "The Contractor shall commence the Works within 14 days of receiving the Engineer's Notice to Commence. The Contractor shall proceed with the Works with due expedition and without delay in accordance with the Contract.",
+    "risk_category": "MEDIUM",
+    "section": "Part I — General Conditions",
+    "keywords": [
+      "commencement",
+      "notice to commence",
+      "expedition",
+      "delay"
+    ]
+  },
+  {
+    "clause_id": "GCC-11",
+    "clause_title": "Defects Liability Period",
+    "clause_text": "The Defects Notification Period shall be 12 months from the date of issue of the Taking Over Certificate. During the DNP, the Contractor shall rectify all defects at no additional cost to the Employer. The Performance Certificate is issued at the end of the DNP after all defects are rectified.",
+    "risk_category": "MEDIUM",
+    "section": "Part I — General Conditions",
+    "keywords": [
+      "defects",
+      "DNP",
+      "taking over certificate",
+      "performance certificate",
+      "rectification"
+    ]
+  },
+  {
+    "clause_id": "GCC-13",
+    "clause_title": "Variations",
+    "clause_text": "The Engineer may issue Variation Orders at any time before the Taking Over Certificate. Variations may include changes to quantities, quality, dimensions, or scope. Total Variations shall not exceed 25% of the Contract Price without competent authority approval. The Contractor shall not vary the Works without a written Variation Order.",
+    "risk_category": "MEDIUM",
+    "section": "Part I — General Conditions",
+    "keywords": [
+      "variation",
+      "variation order",
+      "scope change",
+      "25 percent",
+      "engineer"
+    ]
+  },
+  {
+    "clause_id": "GCC-14",
+    "clause_title": "Payment Terms",
+    "clause_text": "The Contractor shall submit monthly Interim Payment Applications to the Engineer. The Engineer shall certify within 28 days and the Employer shall pay within 28 days of certification. Retention of 5% is deducted from interim payments, released 50% at Taking Over and 50% at Performance Certificate. Late payment attracts financing charges at the rate specified in the Contract Data.",
+    "risk_category": "MEDIUM",
+    "section": "Part I — General Conditions",
+    "keywords": [
+      "payment",
+      "interim payment",
+      "retention",
+      "28 days",
+      "financing charges"
+    ]
+  },
+  {
+    "clause_id": "GCC-19",
+    "clause_title": "Force Majeure",
+    "clause_text": "Force Majeure means an exceptional event beyond a Party's control that could not have been foreseen or avoided. This includes war, terrorism, natural disasters, and riots. The affected Party must notify within 14 days. Neither Party may terminate unless Force Majeure continues beyond 84 days. The Contractor is entitled to extension of time but not additional payment.",
+    "risk_category": "MEDIUM",
+    "section": "Part I — General Conditions",
+    "keywords": [
+      "force majeure",
+      "beyond control",
+      "notice",
+      "84 days",
+      "extension of time"
+    ]
+  },
+  {
+    "clause_id": "GCC-20",
+    "clause_title": "Dispute Resolution and Arbitration",
+    "clause_text": "Disputes shall first be referred to the Engineer for determination within 28 days. If dissatisfied, either Party may give notice and refer to arbitration under the Arbitration and Conciliation Act 1996. A sole arbitrator is mutually appointed or by Railway Authority. Seat of arbitration is New Delhi. The Contractor shall continue Works pending dispute resolution.",
+    "risk_category": "MEDIUM",
+    "section": "Part I — General Conditions",
+    "keywords": [
+      "dispute",
+      "arbitration",
+      "engineer determination",
+      "Arbitration Act",
+      "New Delhi"
+    ]
+  },
+  {
+    "clause_id": "GCC-47",
+    "clause_title": "Termination by Employer",
+    "clause_text": "The Employer may terminate the Contract after a 28-day cure period notice if the Contractor abandons the Works, fails to proceed, subcontracts without consent, or becomes insolvent. Upon termination, the Employer may forfeit the Performance Security and recover all losses from an alternate contractor.",
+    "risk_category": "HIGH",
+    "section": "Part II — Special Conditions",
+    "keywords": [
+      "termination",
+      "employer",
+      "28 days cure",
+      "performance security",
+      "forfeiture"
+    ]
+  },
+  {
+    "clause_id": "GCC-48",
+    "clause_title": "Termination by Contractor",
+    "clause_text": "The Contractor may terminate if the Employer fails to pay within 56 days of due date, substantially fails its obligations, issues a prolonged suspension over 84 days, or becomes insolvent. Upon Contractor termination, the Employer pays work executed, material costs, loss of profit, and demobilisation costs.",
+    "risk_category": "HIGH",
+    "section": "Part II — Special Conditions",
+    "keywords": [
+      "termination",
+      "contractor",
+      "non-payment",
+      "suspension",
+      "demobilisation"
+    ]
+  },
+  {
+    "clause_id": "GCC-49",
+    "clause_title": "Liquidated Damages for Delay",
+    "clause_text": "If the Contractor fails to complete by the Time for Completion, Liquidated Damages shall be levied at the daily rate specified in the Contract Data. Total LD shall not exceed 10% of the Contract Price. LD is the sole remedy for delay and may be deducted from payments or recovered from Performance Security.",
+    "risk_category": "HIGH",
+    "section": "Part II — Special Conditions",
+    "keywords": [
+      "liquidated damages",
+      "LD",
+      "delay",
+      "10 percent",
+      "time for completion"
+    ]
+  },
+  {
+    "clause_id": "GCC-50",
+    "clause_title": "Extension of Time for Completion",
+    "clause_text": "The Contractor is entitled to Extension of Time (EOT) for delays caused by Employer-issued Variations, force majeure, adverse physical conditions, or Employer's Personnel defaults. EOT notice must be submitted within 28 days of the delaying event. The Engineer assesses and grants a fair extension.",
+    "risk_category": "MEDIUM",
+    "section": "Part II — Special Conditions",
+    "keywords": [
+      "extension of time",
+      "EOT",
+      "28 days notice",
+      "force majeure",
+      "variation"
+    ]
+  }
+]
