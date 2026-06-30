@@ -1,0 +1,15 @@
+gradio>=6.0.0
+PyMuPDF==1.24.10
+pytesseract==0.3.13
+Pillow==10.4.0
+chromadb==0.5.15
+sentence-transformers==3.1.1
+reportlab==4.2.2
+python-dotenv==1.0.1
+requests==2.32.3
+torch==2.4.1
+transformers==4.44.2
+numpy==1.26.4
+# Required when Keras 3 / TensorFlow 2.20+ is installed (Python 3.12 environments)
+tf-keras>=2.16.0
+protobuf==5.28.3
