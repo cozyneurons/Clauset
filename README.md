@@ -4,6 +4,22 @@ A FastAPI + React JS application that analyzes Railway contract PDFs against the
 
 ---
 
+## Frontend Setup
+
+```bash
+cd frontend
+
+# Install dependencies
+npm install
+
+# Start development server
+npm run dev
+```
+
+The frontend will be available at `http://localhost:5173`.
+
+---
+
 ## Backend Setup
 
 ```bash
@@ -22,6 +38,7 @@ brew install tesseract
 # Set up environment variables
 cp .env.example .env
 # Edit .env and add your GEMINI_API_KEY
+# Optional: add GEMINI_VALIDATION_ENABLED to enable Gemini second-pass validation
 
 # Generate the GCC clause reference JSON
 # With an official GCC PDF:
@@ -58,14 +75,24 @@ Accepts a PDF upload and returns structured clause mapping results.
   "found_count": 9,
   "missing_count": 3,
   "part_errors": [],
+  "needs_review_count": 1,
+  "gemini_summary": {
+    "status": "complete",
+    "model": "gemini-3.1-flash-lite",
+    "validated_count": 12
+  },
   "clauses": [
     {
       "clause_id": "GCC-47",
       "clause_title": "Termination by Employer",
       "risk_category": "HIGH",
       "status": "present",
+      "final_status": "present",
       "page_number": 23,
       "confidence": "high",
+      "gemini_status": "confirmed_present",
+      "gemini_confidence": "high",
+      "gemini_reason": "The contract evidence covers the termination right in the GCC clause.",
       "verbatim_text": "...",
       "matched_keywords": []
     }
@@ -77,6 +104,9 @@ Accepts a PDF upload and returns structured clause mapping results.
 - `present` — found and confirmed by Gemini with high/medium confidence
 - `present_fuzzy` — not found by Gemini but confirmed by fuzzy keyword search
 - `truly_missing` — not found by either method; likely absent from the contract
+- `needs_review` — Gemini found the evidence too weak or inconsistent for a final decision
+
+When `GEMINI_VALIDATION_ENABLED` is configured, Gemini runs as a fourth agent and validates the clause results batch by batch against the official GCC text. If the key is missing, the API still works and marks Gemini validation as skipped.
 
 ---
 
@@ -95,5 +125,11 @@ backend/
     ├── __init__.py
     ├── pdf_extractor.py           # PyMuPDF + OCR text extraction
     ├── gemini_mapper.py           # Gemini 3-part mapping pipeline
-    └── clause_matcher.py          # Anchor extraction + fuzzy fallback
+    ├── clause_matcher.py          # Anchor extraction + fuzzy fallback
+    └── agents/
+        ├── document_agent.py      # Parses PDF and creates 3 parts
+        ├── mapper_agent.py        # Runs Gemini mapping
+        ├── validator_agent.py     # Adds evidence + fuzzy fallback
+        ├── gemini_validator_agent.py # Runs Gemini batch validation
+        └── pipeline.py            # Orchestrates the agent chain
 ```

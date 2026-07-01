@@ -4,7 +4,8 @@ core/gemini_mapper.py
 Gemini-powered contract-to-GCC clause mapping pipeline.
 
 For each of the 3 contract parts:
-  1. Build a structured prompt containing only GCC clause IDs + titles (not full texts).
+  1. Build a structured prompt containing compact GCC metadata (IDs, titles,
+     sections, keywords; not full texts).
   2. Send to Gemini with strict JSON schema enforcement.
   3. Gemini returns page-scoped anchors for every clause it detects in that part.
 
@@ -20,14 +21,20 @@ import logging
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, asdict
 
-import google.generativeai as genai
+try:
+    from google import genai
+    from google.genai import types as genai_types
+    NEW_GENAI_SDK = True
+except ImportError:
+    import google.generativeai as genai
+    NEW_GENAI_SDK = False
 from dotenv import load_dotenv
 
 load_dotenv()
 logger = logging.getLogger(__name__)
 
 # ── Gemini model — read from env, default to gemini-1.5-flash ──
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
 
 # ── Backoff settings for rate-limit handling ──
 MAX_RETRIES = 4
@@ -65,17 +72,20 @@ class MappingResult:
 # Gemini client initialisation
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _get_model() -> genai.GenerativeModel:
-    """Initialise the Gemini model with JSON output enforced."""
+def _get_client():
+    """Initialise and return the Gemini client."""
     api_key = os.getenv("GEMINI_API_KEY", "")
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY is not set in your .env file.")
+    if NEW_GENAI_SDK:
+        return genai.Client(api_key=api_key)
+
     genai.configure(api_key=api_key)
     return genai.GenerativeModel(
         model_name=GEMINI_MODEL,
         generation_config=genai.GenerationConfig(
             response_mime_type="application/json",
-            temperature=0.0,   # Deterministic output
+            temperature=0.0,
         ),
     )
 
@@ -88,20 +98,17 @@ def _build_mapping_prompt(
     part_text: str,
     part_index: int,
     total_parts: int,
-    gcc_clause_index: List[Dict[str, str]],
+    gcc_clause_index: List[Dict[str, Any]],
     part_page_start: int,
     part_page_end: int,
 ) -> str:
     """
     Build the mapping prompt for a single contract part.
 
-    gcc_clause_index is a compact list of {clause_id, clause_title} dicts — 
-    NOT full clause texts, to keep prompt size small.
+    gcc_clause_index is a compact list of metadata dicts, NOT full clause
+    texts, to keep prompt size small.
     """
-    clause_index_str = "\n".join(
-        f'  - {c["clause_id"]}: {c["clause_title"]}'
-        for c in gcc_clause_index
-    )
+    clause_index_str = json.dumps(gcc_clause_index, ensure_ascii=False)
 
     return f"""You are a senior legal analyst for Indian Railways contracts.
 
@@ -114,6 +121,7 @@ and identify which of the listed Standard GCC clauses are referenced, addressed,
 
 ## Instructions
 For each GCC clause that you can locate in the contract text:
+- Use the clause title, section, and keywords to identify semantically equivalent contract clauses.
 - Extract the verbatim FIRST 6–8 words of the matching clause text in the CONTRACT (not from the GCC list).
 - Extract the verbatim LAST 6–8 words of the matching clause text in the CONTRACT.
 - Record the approximate page number (from {part_page_start} to {part_page_end}).
@@ -143,7 +151,7 @@ Return ONLY the JSON array — no markdown, no explanation.
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _call_gemini_with_backoff(
-    model: genai.GenerativeModel,
+    client,
     prompt: str,
     part_index: int,
 ) -> Optional[str]:
@@ -156,7 +164,17 @@ def _call_gemini_with_backoff(
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             logger.info("Gemini call — Part %d, attempt %d/%d...", part_index + 1, attempt, MAX_RETRIES)
-            response = model.generate_content(prompt)
+            if NEW_GENAI_SDK:
+                response = client.models.generate_content(
+                    model=GEMINI_MODEL,
+                    contents=prompt,
+                    config=genai_types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        temperature=0.0,
+                    ),
+                )
+            else:
+                response = client.generate_content(prompt)
             logger.info("Gemini call — Part %d succeeded.", part_index + 1)
             return response.text.strip()
         except Exception as exc:
@@ -230,11 +248,16 @@ def map_contract_to_gcc(
           - missing_candidates: list of clause_ids not found in any part
           - part_errors: list of part indices that had API/parse failures
     """
-    model = _get_model()
+    client = _get_client()
 
-    # Build compact index (IDs + titles only) for the prompt — keeps tokens low
+    # Build compact index for the prompt; full GCC text is reserved for Grok validation.
     gcc_clause_index = [
-        {"clause_id": c["clause_id"], "clause_title": c["clause_title"]}
+        {
+            "clause_id": c["clause_id"],
+            "clause_title": c["clause_title"],
+            "section": c.get("section", ""),
+            "keywords": c.get("keywords", [])[:8],
+        }
         for c in gcc_clauses
     ]
     all_gcc_ids = {c["clause_id"] for c in gcc_clauses}
@@ -262,7 +285,7 @@ def map_contract_to_gcc(
             part_page_end=page_end,
         )
 
-        raw = _call_gemini_with_backoff(model, prompt, part_idx)
+        raw = _call_gemini_with_backoff(client, prompt, part_idx)
         if raw is None:
             part_errors.append(part_idx)
             continue

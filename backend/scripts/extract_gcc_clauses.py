@@ -37,7 +37,8 @@ except ImportError:
     OCR_AVAILABLE = False
 
 try:
-    import google.generativeai as genai
+    from google import genai
+    from google.genai import types as genai_types
     GENAI_AVAILABLE = True
 except ImportError:
     GENAI_AVAILABLE = False
@@ -58,7 +59,7 @@ BACKEND_DIR = SCRIPT_DIR.parent
 DEFAULT_OUTPUT = BACKEND_DIR / "data" / "gcc_clauses.json"
 
 # ── Gemini config ──
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # SECTION 1 — PDF Text Extraction
@@ -150,21 +151,14 @@ def extract_clauses_with_gemini(full_text: str) -> List[Dict[str, Any]]:
     """
     if not GENAI_AVAILABLE:
         raise RuntimeError(
-            "google-generativeai is not installed. Run: pip install google-generativeai"
+            "google-genai is not installed. Run: pip install google-genai"
         )
 
     api_key = os.getenv("GEMINI_API_KEY", "")
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY is not set in your .env file.")
 
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel(
-        model_name=GEMINI_MODEL,
-        generation_config=genai.GenerationConfig(
-            response_mime_type="application/json",
-            temperature=0.0,
-        ),
-    )
+    client = genai.Client(api_key=api_key)
 
     # Split into chunks of ~80k characters with 2k character overlap
     CHUNK_SIZE = 80_000
@@ -190,7 +184,14 @@ def extract_clauses_with_gemini(full_text: str) -> List[Dict[str, Any]]:
             f"--- GCC DOCUMENT TEXT (part {idx + 1} of {len(chunks)}) ---\n{chunk}"
         )
         try:
-            response = model.generate_content(prompt)
+            response = client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=prompt,
+                config=genai_types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    temperature=0.0,
+                ),
+            )
             raw_json = response.text.strip()
             clauses = json.loads(raw_json)
             if not isinstance(clauses, list):

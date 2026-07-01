@@ -42,27 +42,58 @@ def _normalize(text: str) -> str:
     return re.sub(r"\s+", " ", text.lower()).strip()
 
 
+def _normalize_with_mapping(text: str) -> Tuple[str, List[int]]:
+    """
+    Returns the normalized string and a mapping list where mapping[i] 
+    is the index in the original string that corresponds to the character 
+    at index i in the normalized string.
+    """
+    norm_chars = []
+    mapping = []
+    in_space = False
+    
+    for i, c in enumerate(text):
+        if c.isspace():
+            if not in_space:
+                norm_chars.append(' ')
+                mapping.append(i)
+                in_space = True
+        else:
+            norm_chars.append(c.lower())
+            mapping.append(i)
+            in_space = False
+            
+    if norm_chars and norm_chars[0] == ' ':
+        norm_chars.pop(0)
+        mapping.pop(0)
+    if norm_chars and norm_chars[-1] == ' ':
+        norm_chars.pop(-1)
+        mapping.pop(-1)
+        
+    return "".join(norm_chars), mapping
+
+
 def _fuzzy_find_anchor(
     page_text: str,
     anchor: str,
     threshold: int = 80,
 ) -> Optional[int]:
     """
-    Find the start character index of `anchor` within `page_text` using
-    a sliding window fuzzy match. Returns None if no match above threshold.
+    Find the start character index of `anchor` within `page_text` (in original coordinates)
+    using a sliding window fuzzy match. Returns None if no match above threshold.
     """
     if not anchor or not page_text:
         return None
 
-    norm_page = _normalize(page_text)
+    norm_page, mapping = _normalize_with_mapping(page_text)
     norm_anchor = _normalize(anchor)
     anchor_len = len(norm_anchor)
 
-    if anchor_len == 0:
+    if anchor_len == 0 or not mapping:
         return None
 
     best_score = 0
-    best_pos = None
+    best_pos_norm = None
 
     # Slide a window of anchor_len ± 20% across the normalized page text
     window = max(anchor_len, 1)
@@ -72,10 +103,10 @@ def _fuzzy_find_anchor(
         score = fuzz.partial_ratio(norm_anchor, snippet)
         if score > best_score:
             best_score = score
-            best_pos = start
+            best_pos_norm = start
 
     if best_score >= threshold:
-        return best_pos
+        return mapping[best_pos_norm]
     return None
 
 
@@ -206,10 +237,12 @@ def fuzzy_search_missing(
         if len(hits) >= MIN_KEYWORD_HITS:
             # Find a short context snippet around the first matched keyword
             first_kw = _normalize(hits[0])
-            idx = _normalize(full_text).find(first_kw[:20])  # search on first 20 chars
+            norm_full, mapping = _normalize_with_mapping(full_text)
+            idx_norm = norm_full.find(first_kw[:20])  # search on first 20 chars
             context = None
-            if idx != -1:
-                words = full_text[max(0, idx - 100): idx + 300].split()
+            if idx_norm != -1 and idx_norm < len(mapping):
+                idx_orig = mapping[idx_norm]
+                words = full_text[max(0, idx_orig - 100): idx_orig + 300].split()
                 context = " ".join(words[:60]).strip()
 
             logger.info(

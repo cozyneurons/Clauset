@@ -9,6 +9,7 @@ Phase 1 endpoint:
     - Extracts text (PyMuPDF + OCR fallback)
     - Splits into 3 parts and sends to Gemini for clause mapping
     - Runs fuzzy fallback for missing candidates
+    - Runs optional Gemini batch validation when enabled
     - Returns structured JSON analysis result
 
 Run locally:
@@ -27,9 +28,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 
-from core.pdf_extractor import extract_pages, pages_to_full_text, split_pages_into_parts
-from core.gemini_mapper import map_contract_to_gcc, MappingResult
-from core.clause_matcher import extract_verbatim_text, fuzzy_search_missing
+from core.agents.pipeline import ContractAnalysisPipeline
 
 load_dotenv()
 
@@ -39,6 +38,11 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+
+def _has_real_env_key(name: str) -> bool:
+    value = os.getenv(name, "").strip()
+    return bool(value and not value.startswith("your_"))
 
 # ── GCC reference data path ──
 GCC_CLAUSES_PATH = Path(__file__).parent / "data" / "gcc_clauses.json"
@@ -100,12 +104,57 @@ async def health() -> Dict[str, Any]:
         "status": "ok",
         "gcc_clauses_loaded": len(GCC_CLAUSES),
         "gemini_model": os.getenv("GEMINI_MODEL", "gemini-1.5-flash"),
+        "gemini_validation_enabled": os.getenv("GEMINI_VALIDATION_ENABLED", "true").lower() in {"1", "true", "yes", "on"},
+        "gemini_model": os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite"),
+        "gemini_api_key_configured": _has_real_env_key("GEMINI_API_KEY"),
     }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Phase 1 — Contract Analysis Endpoint
 # ─────────────────────────────────────────────────────────────────────────────
+
+@app.get("/api/gcc-clauses")
+async def get_gcc_clauses(
+    risk: str = None,
+    search: str = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> Dict[str, Any]:
+    """
+    Browse all extracted GCC clauses.
+
+    Query params:
+      - risk: Filter by risk_category (HIGH, MEDIUM, LOW)
+      - search: Keyword search in clause_id, clause_title, clause_text
+      - limit: Number of results to return (default 50)
+      - offset: Pagination offset (default 0)
+    """
+    clauses = GCC_CLAUSES
+
+    if risk:
+        clauses = [c for c in clauses if c.get("risk_category", "").upper() == risk.upper()]
+
+    if search:
+        q = search.lower()
+        clauses = [
+            c for c in clauses
+            if q in c.get("clause_id", "").lower()
+            or q in c.get("clause_title", "").lower()
+            or q in c.get("clause_text", "").lower()
+            or any(q in kw.lower() for kw in c.get("keywords", []))
+        ]
+
+    total = len(clauses)
+    paginated = clauses[offset: offset + limit]
+
+    return {
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+        "clauses": paginated,
+    }
+
 
 @app.post("/api/analyze")
 async def analyze_contract(pdf: UploadFile = File(...)) -> JSONResponse:
@@ -120,7 +169,8 @@ async def analyze_contract(pdf: UploadFile = File(...)) -> JSONResponse:
       5. Merge mapping results.
       6. Extract verbatim clause text using page-scoped fuzzy anchor matching.
       7. Run fuzzy keyword fallback for "missing" candidates.
-      8. Return structured JSON result.
+      8. Run Gemini second-pass validation batch by batch, when configured.
+      9. Return structured JSON result.
 
     Returns:
         JSON with keys:
@@ -130,9 +180,11 @@ async def analyze_contract(pdf: UploadFile = File(...)) -> JSONResponse:
           - found_count: int
           - missing_count: int
           - part_errors: list[int]
+          - gemini_summary: dict
           - clauses: list of {
                 clause_id, clause_title, risk_category,
-                status, page_number, confidence,
+                status, final_status, page_number, confidence,
+                gemini_status, gemini_confidence, gemini_reason,
                 verbatim_text, matched_keywords
             }
     """
@@ -158,78 +210,19 @@ async def analyze_contract(pdf: UploadFile = File(...)) -> JSONResponse:
     logger.info("Received PDF: %s (%d bytes). Temp path: %s", pdf.filename, len(content), tmp_path)
 
     try:
-        # ── Step 1: Extract pages ──
+        pipeline = ContractAnalysisPipeline()
         try:
-            pages = extract_pages(tmp_path)
-        except (ValueError, RuntimeError) as exc:
-            raise HTTPException(status_code=422, detail=str(exc))
-
-        page_count = len(pages)
-        full_text = pages_to_full_text(pages)
-        logger.info("Extracted %d pages, %d total chars.", page_count, len(full_text))
-
-        # ── Step 2: Split into 3 parts ──
-        parts = split_pages_into_parts(pages, n_parts=3)
-
-        # ── Step 3–4: Run Gemini mapping ──
-        mapping: MappingResult = map_contract_to_gcc(parts, GCC_CLAUSES)
-
-        # ── Step 5: Extract verbatim text for found clauses ──
-        gcc_lookup: Dict[str, Dict[str, Any]] = {c["clause_id"]: c for c in GCC_CLAUSES}
-        clause_results: List[Dict[str, Any]] = []
-
-        for cid, mapped in mapping.found.items():
-            verbatim = extract_verbatim_text(mapped, pages)
-            gcc_meta = gcc_lookup.get(cid, {})
-            clause_results.append({
-                "clause_id": cid,
-                "clause_title": gcc_meta.get("clause_title", ""),
-                "risk_category": gcc_meta.get("risk_category", "MEDIUM"),
-                "section": gcc_meta.get("section", ""),
-                "status": "present",
-                "page_number": mapped.page_number,
-                "confidence": mapped.confidence,
-                "verbatim_text": verbatim or "",
-                "matched_keywords": [],
+            result = pipeline.run({
+                "pdf_path": tmp_path,
+                "filename": pdf.filename,
+                "gcc_clauses": GCC_CLAUSES,
             })
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
 
-        # ── Step 6: Fuzzy fallback for missing candidates ──
-        fuzzy_results = fuzzy_search_missing(
-            missing_ids=mapping.missing_candidates,
-            gcc_clauses=GCC_CLAUSES,
-            full_text=full_text,
-        )
-
-        for cid, fuzzy_data in fuzzy_results.items():
-            gcc_meta = gcc_lookup.get(cid, {})
-            clause_results.append({
-                "clause_id": cid,
-                "clause_title": gcc_meta.get("clause_title", ""),
-                "risk_category": gcc_meta.get("risk_category", "MEDIUM"),
-                "section": gcc_meta.get("section", ""),
-                "status": fuzzy_data["status"],   # "present_fuzzy" or "truly_missing"
-                "page_number": None,
-                "confidence": "low" if fuzzy_data["status"] == "present_fuzzy" else None,
-                "verbatim_text": fuzzy_data.get("context") or "",
-                "matched_keywords": fuzzy_data.get("matched_keywords", []),
-            })
-
-        # ── Sort: present first, then present_fuzzy, then truly_missing ──
-        status_order = {"present": 0, "present_fuzzy": 1, "truly_missing": 2}
-        clause_results.sort(key=lambda x: (status_order.get(x["status"], 3), x["clause_id"]))
-
-        found_count = sum(1 for c in clause_results if c["status"] in ("present", "present_fuzzy"))
-        missing_count = sum(1 for c in clause_results if c["status"] == "truly_missing")
-
-        return JSONResponse(content={
-            "filename": pdf.filename,
-            "page_count": page_count,
-            "total_gcc_clauses": len(GCC_CLAUSES),
-            "found_count": found_count,
-            "missing_count": missing_count,
-            "part_errors": mapping.part_errors,
-            "clauses": clause_results,
-        })
+        return JSONResponse(content=result)
 
     finally:
         # Always clean up the temp file
